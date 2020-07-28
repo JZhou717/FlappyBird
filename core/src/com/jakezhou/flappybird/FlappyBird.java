@@ -5,6 +5,9 @@ import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.Texture;
+import com.badlogic.gdx.graphics.g2d.BitmapFont;
+import com.badlogic.gdx.graphics.g2d.GlyphLayout;
+import com.badlogic.gdx.graphics.g2d.Sprite;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.math.Circle;
@@ -18,11 +21,16 @@ import java.util.Random;
 public class FlappyBird extends ApplicationAdapter {
 	SpriteBatch batch;
 	Texture bg;
+	BitmapFont font;
+	GlyphLayout layout;
 //	ShapeRenderer shapeRenderer;
 	int screen_width, screen_height;
+	int cycles = 0;
+	int score = 0;
 
 	// Bird state information
-	Texture[] birds;
+	Texture[] birdTextures;
+	Sprite birdSprite;
 	boolean isFlapping = false;
 		// initial position is in the center of the screen (48 is half the height of bird sprite)
 	float position;
@@ -49,18 +57,27 @@ public class FlappyBird extends ApplicationAdapter {
 		topRect = new Rectangle();
 		bottomRect = new Rectangle();
 //		shapeRenderer = new ShapeRenderer();
+		font = new BitmapFont();
+		font.setColor(Color.WHITE);
+		font.getData().setScale(10);
+		layout = new GlyphLayout();
+		layout.setText(font, String.valueOf(score));
 
 		screen_width = Gdx.graphics.getWidth();
 		screen_height = Gdx.graphics.getHeight();
 
 		batch = new SpriteBatch();
 		bg = new Texture("bg.png");
-		birds = new Texture[2];
-		birds[0] = new Texture("bird.png");
-		birds[1] = new Texture("bird2.png");
-		position = screen_height / 2 - birds[0].getHeight() / 2;
+		birdTextures = new Texture[2];
+		birdTextures[0] = new Texture("bird.png");
+		birdTextures[1] = new Texture("bird2.png");
+		position = screen_height / 2 - birdTextures[0].getHeight() / 2;
+		birdSprite = new Sprite(birdTextures[0]);
+		birdSprite.setPosition(screen_width / 2 - birdSprite.getWidth() / 2, position);
 
 		tubes.add(new Tubes());
+
+		score = 0;
 
 	}
 
@@ -75,11 +92,16 @@ public class FlappyBird extends ApplicationAdapter {
 			}
 
 			batch.begin();
-			Texture bird = isFlapping ? birds[0] : birds[1];
+
 			batch.draw(bg, 0, 0, screen_width, screen_height);
-			batch.draw(bird, screen_width / 2 - bird.getWidth() / 2,
-					position);
-			isFlapping = !isFlapping;
+
+			Texture bird = isFlapping ? birdTextures[0] : birdTextures[1];
+			birdSprite.setTexture(bird);
+			birdSprite.draw(batch);if(cycles == 7) {
+				isFlapping = !isFlapping;
+				cycles = 0;
+			}
+
 			batch.end();
 
 		}
@@ -90,23 +112,18 @@ public class FlappyBird extends ApplicationAdapter {
 
 			// reset velocity on tap
 			if (Gdx.input.justTouched()) {
+				birdSprite.setTexture(birdTextures[1]);
 				velocity = -15;
 			}
 
-			if(position < 0 || position > screen_height - birds[0].getHeight()) {
+			if(position < 0) {
 				gameState = GAME_OVER;
 			}
+			position = Math.min(position, screen_height - birdSprite.getHeight());
 
 			batch.begin();
 			// reset blank background
 			batch.draw(bg, 0, 0, screen_width, screen_height);
-
-			// Alternating flappy bird sprite flapping and not
-			Texture bird = isFlapping ? birds[0] : birds[1];
-			batch.draw(bird, screen_width / 2 - bird.getWidth() / 2,
-					position);
-			birdCircle.set(screen_width / 2, position + bird.getHeight() / 2, bird.getWidth() / 2);
-			isFlapping = !isFlapping;
 
 			// Moving the tubes
 			for(Tubes t : tubes) {
@@ -118,9 +135,27 @@ public class FlappyBird extends ApplicationAdapter {
 						t.bottom.getHeight());
 			}
 
+			// Alternating flappy bird sprite flapping and not every 10 cycles
+			Texture bird = isFlapping ? birdTextures[0] : birdTextures[1];
+			birdSprite.setTexture(bird);
+			birdSprite.setPosition(birdSprite.getX(), position);
+			float rot = Math.min(-velocity * 3, 90);
+			birdSprite.setRotation(rot);
+			birdSprite.draw(batch);
+			birdCircle.set(screen_width / 2, position + bird.getHeight() / 2, bird.getWidth() / 2);
+			if(cycles == 7) {
+				isFlapping = !isFlapping;
+				cycles = 0;
+			}
+
+			// Showing the score
+			layout.setText(font, String.valueOf(score));
+			font.draw(batch, layout, screen_width / 2 - layout.width / 2,
+					screen_height * .75f);
+
 			batch.end();
 
-			// shaperender used to test where shapes are to see detection when testing
+			// shaperender used during testing to see where shapes are to detect collision
 //			shapeRenderer.begin(ShapeRenderer.ShapeType.Filled);
 //			shapeRenderer.setColor(Color.CLEAR);
 //			shapeRenderer.circle(birdCircle.x, birdCircle.y, birdCircle.radius);
@@ -135,6 +170,34 @@ public class FlappyBird extends ApplicationAdapter {
 //			shapeRenderer.end();
 
 		}
+		else if(gameState == GAME_OVER) {
+			// bird falls to the bottom of the screen
+
+			if(position <= 0) return;
+			// bird accelerations downwards
+			velocity += acceleration;
+			position -= velocity;
+
+			batch.begin();
+			// reset blank background
+			batch.draw(bg, 0, 0, screen_width, screen_height);
+			for(Tubes t : tubes) {
+				batch.draw(t.top, t.x_pos, t.y_pos + TUBE_GAP);
+				batch.draw(t.bottom, t.x_pos, t.y_pos - t.bottom.getHeight());
+			}
+
+			birdSprite.setPosition(birdSprite.getX(), position);
+			float rot = Math.min(-velocity * 3, 90);
+			birdSprite.setRotation(rot);
+			birdSprite.draw(batch);
+			// Showing the score
+			layout.setText(font, String.valueOf(score));
+			font.draw(batch, layout, screen_width / 2 - layout.width / 2,
+					screen_height * .75f);
+			batch.end();
+		}
+
+		cycles++;
 
 	}
 	
@@ -148,6 +211,8 @@ public class FlappyBird extends ApplicationAdapter {
 	private class Tubes {
 		Texture top;
 		Texture bottom;
+		boolean past = false;
+
 		//int x_pos = screen_width - top.getWidth();
 		int x_pos;
 		// Leave a 200 value gap on top and botttom
@@ -169,6 +234,11 @@ public class FlappyBird extends ApplicationAdapter {
 			// add in new tubes
 			if(x_pos == screen_width - 620) {
 				tubes.add(new Tubes());
+			}
+			// increment score when bird is past
+			if(!past && x_pos + top.getWidth() <= screen_width / 2) {
+				past = true;
+				score++;
 			}
 
 			// move this
