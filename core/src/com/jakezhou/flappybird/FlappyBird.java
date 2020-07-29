@@ -3,13 +3,11 @@ package com.jakezhou.flappybird;
 import com.badlogic.gdx.ApplicationAdapter;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.graphics.Color;
-import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.g2d.GlyphLayout;
 import com.badlogic.gdx.graphics.g2d.Sprite;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
-import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.math.Circle;
 import com.badlogic.gdx.math.Intersector;
 import com.badlogic.gdx.math.Rectangle;
@@ -21,12 +19,13 @@ import java.util.Random;
 public class FlappyBird extends ApplicationAdapter {
 	SpriteBatch batch;
 	Texture bg;
+	Texture gameOver;
 	BitmapFont font;
 	GlyphLayout layout;
 //	ShapeRenderer shapeRenderer;
 	int screen_width, screen_height;
 	int cycles = 0;
-	int score = 0;
+	int score_count = 0;
 
 	// Bird state information
 	Texture[] birdTextures;
@@ -35,7 +34,7 @@ public class FlappyBird extends ApplicationAdapter {
 		// initial position is in the center of the screen (48 is half the height of bird sprite)
 	float position;
 	float velocity = 0;
-	float acceleration = .6f;
+	float acceleration = .9f;
 	Circle birdCircle;
 	Rectangle topRect, bottomRect;
 
@@ -61,7 +60,7 @@ public class FlappyBird extends ApplicationAdapter {
 		font.setColor(Color.WHITE);
 		font.getData().setScale(10);
 		layout = new GlyphLayout();
-		layout.setText(font, String.valueOf(score));
+		layout.setText(font, String.valueOf(score_count));
 
 		screen_width = Gdx.graphics.getWidth();
 		screen_height = Gdx.graphics.getHeight();
@@ -77,8 +76,32 @@ public class FlappyBird extends ApplicationAdapter {
 
 		tubes.add(new Tubes());
 
-		score = 0;
+		gameOver = new Texture("game-over.png");
 
+		score_count = 0;
+
+	}
+
+
+	private void startGame() {
+		for(Tubes t : tubes) tubes.remove(t);
+		tubes.add(new Tubes());
+		birdSprite.setTexture(birdTextures[0]);
+		position = screen_height / 2 - birdTextures[0].getHeight() / 2;
+		velocity = 0;
+		birdSprite.setPosition(screen_width / 2 - birdSprite.getWidth() / 2, position);
+		birdSprite.setRotation(0);
+		score_count = 0;
+
+
+
+		batch.begin();
+
+		batch.draw(bg, 0, 0, screen_width, screen_height);
+
+		birdSprite.draw(batch);
+
+		batch.end();
 	}
 
 
@@ -89,6 +112,7 @@ public class FlappyBird extends ApplicationAdapter {
 		if(gameState == GAME_READY) {
 			if (Gdx.input.justTouched()) {
 				gameState = GAME_ACTIVE;
+				startGame();
 			}
 
 			batch.begin();
@@ -97,7 +121,12 @@ public class FlappyBird extends ApplicationAdapter {
 
 			Texture bird = isFlapping ? birdTextures[0] : birdTextures[1];
 			birdSprite.setTexture(bird);
-			birdSprite.draw(batch);if(cycles == 7) {
+			position = screen_height / 2 - birdTextures[0].getHeight() / 2;
+			velocity = 0;
+			birdSprite.setPosition(screen_width / 2 - birdSprite.getWidth() / 2, position);
+			birdSprite.setRotation(0);
+			birdSprite.draw(batch);
+			if(cycles == 7) {
 				isFlapping = !isFlapping;
 				cycles = 0;
 			}
@@ -113,12 +142,9 @@ public class FlappyBird extends ApplicationAdapter {
 			// reset velocity on tap
 			if (Gdx.input.justTouched()) {
 				birdSprite.setTexture(birdTextures[1]);
-				velocity = -15;
+				velocity = -18;
 			}
 
-			if(position < 0) {
-				gameState = GAME_OVER;
-			}
 			position = Math.min(position, screen_height - birdSprite.getHeight());
 
 			batch.begin();
@@ -139,7 +165,7 @@ public class FlappyBird extends ApplicationAdapter {
 			Texture bird = isFlapping ? birdTextures[0] : birdTextures[1];
 			birdSprite.setTexture(bird);
 			birdSprite.setPosition(birdSprite.getX(), position);
-			float rot = Math.min(-velocity * 3, 90);
+			float rot = Math.min(-velocity * 3, 85);
 			birdSprite.setRotation(rot);
 			birdSprite.draw(batch);
 			birdCircle.set(screen_width / 2, position + bird.getHeight() / 2, bird.getWidth() / 2);
@@ -149,9 +175,8 @@ public class FlappyBird extends ApplicationAdapter {
 			}
 
 			// Showing the score
-			layout.setText(font, String.valueOf(score));
-			font.draw(batch, layout, screen_width / 2 - layout.width / 2,
-					screen_height * .75f);
+			layout.setText(font, String.valueOf(score_count));
+			font.draw(batch, layout, 100, 200);
 
 			batch.end();
 
@@ -163,7 +188,8 @@ public class FlappyBird extends ApplicationAdapter {
 //			shapeRenderer.rect(bottomRect.x, bottomRect.y, bottomRect.width, bottomRect.height);
 
 			if(Intersector.overlaps(birdCircle, topRect) || Intersector.overlaps(birdCircle,
-					bottomRect)) {
+					bottomRect) || position < 0) {
+				velocity = 10;
 				gameState = GAME_OVER;
 			}
 
@@ -172,11 +198,14 @@ public class FlappyBird extends ApplicationAdapter {
 		}
 		else if(gameState == GAME_OVER) {
 			// bird falls to the bottom of the screen
-
-			if(position <= 0) return;
-			// bird accelerations downwards
-			velocity += acceleration;
-			position -= velocity;
+			if(position <= 0) {
+				position = 0;
+			}
+			else {
+				// bird accelerations downwards
+				velocity += acceleration;
+				position -= velocity;
+			}
 
 			batch.begin();
 			// reset blank background
@@ -187,13 +216,18 @@ public class FlappyBird extends ApplicationAdapter {
 			}
 
 			birdSprite.setPosition(birdSprite.getX(), position);
-			float rot = Math.min(-velocity * 3, 90);
+			float rot = Math.min(-velocity * 3, 85);
 			birdSprite.setRotation(rot);
 			birdSprite.draw(batch);
 			// Showing the score
-			layout.setText(font, String.valueOf(score));
-			font.draw(batch, layout, screen_width / 2 - layout.width / 2,
-					screen_height * .75f);
+			layout.setText(font, String.valueOf(score_count));
+			font.draw(batch, layout, 100,200);
+			batch.draw(gameOver, screen_width / 2 - gameOver.getWidth() / 2, screen_height * .65f);
+
+			if(Gdx.input.justTouched()) {
+				gameState = GAME_READY;
+			}
+
 			batch.end();
 		}
 
@@ -212,6 +246,7 @@ public class FlappyBird extends ApplicationAdapter {
 		Texture top;
 		Texture bottom;
 		boolean past = false;
+		boolean spawned = false;
 
 		//int x_pos = screen_width - top.getWidth();
 		int x_pos;
@@ -231,18 +266,19 @@ public class FlappyBird extends ApplicationAdapter {
 			if(x_pos == top.getWidth() * -1) {
 				tubes.remove(this);
 			}
-			// add in new tubes
-			if(x_pos == screen_width - 620) {
+			// add in new tubes after passing threshold
+			if(!spawned && x_pos <= screen_width - 620) {
 				tubes.add(new Tubes());
+				spawned = true;
 			}
 			// increment score when bird is past
 			if(!past && x_pos + top.getWidth() <= screen_width / 2) {
 				past = true;
-				score++;
+				score_count++;
 			}
 
 			// move this
-			x_pos -= 6;
+			x_pos -= 7;
 
 		}
 
